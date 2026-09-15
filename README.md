@@ -1,38 +1,88 @@
-# Mental Health in Tech Survey — Project Deliverables
+# 🧠 Mental Health in Tech Survey — EDA & Dashboard
 
-This folder contains all three deliverables for the Mental Health in Tech Survey project.
+An end-to-end data analysis project exploring the **OSMI 2014 Mental Health in Tech Survey** — 1,259 responses from tech employees across 48 countries — to understand what personal and workplace factors are associated with seeking mental health treatment.
 
-## 1. `Mental_Health_EDA_Completed.ipynb`
-Full EDA capstone notebook (matches the original template structure) with:
-- Data cleaning (Age outliers, Gender standardization, contextual missing-value handling)
-- 15 required charts, each with "why this chart / insight / business impact" markdown
-- Correlation heatmap & pair plot
-- Business recommendations and conclusion
+🔗 **Live Demo:** [mental-health-tech-survey-emhxxtn7udfnqqeugle5nz.streamlit.app](https://mental-health-tech-survey-emhxxtn7udfnqqeugle5nz.streamlit.app/)
+💻 **GitHub Repo:** [github.com/AkshitaChauhan3206/Mental-Health-Tech-Survey](https://github.com/AkshitaChauhan3206/Mental-Health-Tech-Survey)
 
-Open in Jupyter, Google Colab, or VS Code. All charts are pre-rendered as embedded images, so you can view it without re-running anything — but you can also re-run all cells end-to-end (just make sure `survey.csv` is in the same folder).
+---
 
-## 2. `Mental_Health_in_Tech_Survey.pptx`
-A 15-slide presentation summarizing the EDA findings and recommendations, built directly from the notebook's charts and conclusions. Ready to present as-is, or edit in PowerPoint / Google Slides.
+## 📌 Project Description
 
-## 3. Streamlit App (`app.py` + `requirements.txt`)
-An interactive dashboard version of the EDA — filter by country, gender, age, and treatment status, and explore demographics, treatment drivers, correlations, and any variable on the fly.
+Mental health remains an under-discussed issue in the tech industry despite its demanding, high-pressure nature. This project digs into the OSMI survey data to answer:
 
-### Run locally
+- Who is represented in the survey (age, gender, country, company size)?
+- Which personal factors (e.g., family history) relate to treatment-seeking?
+- Which workplace factors (benefits, care options, anonymity, leave policy) relate to treatment-seeking?
+- What can tech employers do, based on the data, to build more supportive workplaces?
+
+**Key findings:**
+- **Family history** is the strongest single predictor — 74% of respondents with a family history sought treatment vs. 35% without.
+- **Work interference** shows a near-linear relationship with treatment-seeking (14% → 85% as interference goes from "Never" to "Often").
+- **Awareness**, not just availability, drives outcomes — knowing about benefits/care options lifts treatment rates more than the benefit's mere existence.
+- **65%** of respondents don't know if anonymity is protected, and **45%** don't know how easy mental health leave would be to take — a clear communication gap employers can close.
+
+---
+
+## 📂 What's in This Repo
+
+| File | Description |
+|---|---|
+| `Mental_Health_EDA_Completed.ipynb` | Full EDA notebook — data cleaning, 15 visualizations with insights, correlation heatmap, pair plot, and recommendations |
+| `Mental_Health_in_Tech_Survey.pptx` | 15-slide presentation summarizing the analysis and findings |
+| `app.py` | Interactive Streamlit dashboard |
+| `requirements.txt` | Python dependencies for the app |
+| `survey.csv` | Original OSMI 2014 dataset |
+| `cleaned_survey.csv` | Cleaned dataset (1,251 rows, 0 missing values) produced by the notebook |
+
+---
+
+## 🚀 Running the Streamlit App Locally
+
+**1. Clone the repo**
+```bash
+git clone https://github.com/AkshitaChauhan3206/Mental-Health-Tech-Survey.git
+cd Mental-Health-Tech-Survey
+```
+
+**2. Install dependencies**
 ```bash
 pip install -r requirements.txt
+```
+
+**3. Run the app**
+```bash
 streamlit run app.py
 ```
-Make sure `survey.csv` is in the same folder as `app.py` (or upload it via the sidebar uploader once the app is running).
 
-### Deploy for free (Streamlit Community Cloud)
-1. Create a new GitHub repo and push `app.py`, `requirements.txt`, and `survey.csv` to it.
-2. Go to https://share.streamlit.io, sign in with GitHub, and click **"New app"**.
-3. Select your repo/branch and set the main file path to `app.py`.
-4. Click **Deploy** — you'll get a public URL in a couple of minutes.
+The app will open automatically at `http://localhost:8501`. Make sure `survey.csv` is in the same folder as `app.py` — or upload it via the sidebar uploader once the app is running.
 
-### Deploy elsewhere
-The app has no external dependencies beyond `requirements.txt`, so it also runs as-is on Render, Railway, Hugging Face Spaces (Streamlit SDK), or any Docker host running `streamlit run app.py --server.port $PORT --server.address 0.0.0.0`.
+### What the app does
+- Filter the data live by **country, gender, age range, and treatment status**
+- **Overview** tab — headline metrics, missing-value breakdown, treatment split
+- **Demographics** tab — age, gender, country, and company-size distributions
+- **What Drives Treatment** tab — compare treatment-seeking against any workplace/personal factor
+- **Correlations** tab — full correlation heatmap across all encoded variables
+- **Explore Any Variable** tab — pick any column and see its distribution
+- **Raw Data** tab — view and download the filtered dataset
 
-## Data
-`survey.csv` — the original OSMI 2014 Mental Health in Tech Survey (1,259 responses, 27 columns).
-`cleaned_survey.csv` — the cleaned dataset (1,251 rows, 0 missing values) produced by the notebook's data-wrangling step, used for reference.
+---
+
+## 🌐 Deploying Your Own Copy
+
+This app is deployed on **Streamlit Community Cloud**:
+1. Push `app.py`, `requirements.txt`, and `survey.csv` to a GitHub repo.
+2. Go to [share.streamlit.io](https://share.streamlit.io), sign in with GitHub, and click **"New app"**.
+3. Select the repo/branch and set the main file path to `app.py`.
+4. Click **Deploy** — you'll get a public URL within a couple of minutes.
+
+---
+
+## 🛠️ Built With
+Python · pandas · NumPy · Matplotlib · Seaborn · scikit-learn · Streamlit
+
+---
+
+## 👤 Author
+
+**Akshita Chauhan**
