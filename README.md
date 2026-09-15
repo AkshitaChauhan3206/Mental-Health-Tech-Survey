@@ -28,12 +28,9 @@ Mental health remains an under-discussed issue in the tech industry despite its 
 
 | File | Description |
 |---|---|
-| `Mental_Health_EDA_Completed.ipynb` | Full EDA notebook — data cleaning, 15 visualizations with insights, correlation heatmap, pair plot, and recommendations |
-| `Mental_Health_in_Tech_Survey.pptx` | 15-slide presentation summarizing the analysis and findings |
+| `Mental_Health_EDA.ipynb` | Full EDA notebook — data cleaning, 15 visualizations with insights, correlation heatmap, pair plot, and recommendations |
 | `app.py` | Interactive Streamlit dashboard |
 | `requirements.txt` | Python dependencies for the app |
-| `survey.csv` | Original OSMI 2014 dataset |
-| `cleaned_survey.csv` | Cleaned dataset (1,251 rows, 0 missing values) produced by the notebook |
 
 ---
 
