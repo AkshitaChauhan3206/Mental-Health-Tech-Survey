@@ -255,7 +255,13 @@ with tab_corr:
     df_encoded = filtered.copy()
     if len(df_encoded):
         le = LabelEncoder()
-        for col in df_encoded.select_dtypes(include="object").columns:
+        # Use astype(str) + explicit non-numeric detection so this works whether
+        # pandas represents text columns as 'object' (older pandas) or the newer
+        # dedicated 'string' dtype (pandas 2.x/3.x defaults on some platforms,
+        # e.g. Streamlit Community Cloud) — relying on `dtype == object` alone
+        # silently misses 'string' columns on those platforms.
+        text_cols = df_encoded.select_dtypes(include=["object", "string", "category"]).columns
+        for col in text_cols:
             df_encoded[col] = le.fit_transform(df_encoded[col].astype(str))
         fig, ax = plt.subplots(figsize=(12, 9))
         corr = df_encoded.corr()
@@ -267,13 +273,24 @@ with tab_corr:
 # ---------------- EXPLORE ANY VARIABLE ----------------
 with tab_explore:
     st.markdown("Pick any categorical column to see its distribution in the filtered data.")
-    cat_cols = [c for c in filtered.columns if filtered[c].dtype == object and c != "state"]
-    col_choice = st.selectbox("Column", cat_cols, index=cat_cols.index("Gender") if "Gender" in cat_cols else 0)
-    fig, ax = plt.subplots(figsize=(10, 5))
-    order = filtered[col_choice].value_counts().index
-    sns.countplot(y=col_choice, data=filtered, order=order, palette="flare", ax=ax)
-    ax.set_xlabel("Count")
-    st.pyplot(fig)
+    # Same 'object' vs 'string' dtype issue as above — check both.
+    cat_cols = [
+        c for c in filtered.select_dtypes(include=["object", "string", "category"]).columns
+        if c != "state"
+    ]
+    if not cat_cols:
+        st.info("No categorical columns available to explore.")
+    else:
+        default_idx = cat_cols.index("Gender") if "Gender" in cat_cols else 0
+        col_choice = st.selectbox("Column", cat_cols, index=default_idx)
+        if col_choice not in filtered.columns or filtered.empty:
+            st.info("No data matches the current filters.")
+        else:
+            fig, ax = plt.subplots(figsize=(10, 5))
+            order = filtered[col_choice].value_counts().index
+            sns.countplot(y=col_choice, data=filtered, order=order, palette="flare", ax=ax)
+            ax.set_xlabel("Count")
+            st.pyplot(fig)
 
 # ---------------- RAW / CLEANED DATA ----------------
 with tab_data:
