@@ -1,6 +1,6 @@
 """
 Mental Health in Tech Survey — Interactive EDA Dashboard
-Streamlit app built on the OSMI 2014 Mental Health in Tech Survey.
+Built on the OSMI 2014 Mental Health in Tech Survey.
 
 Run locally:
     streamlit run app.py
@@ -10,14 +10,14 @@ Deploy:
     then deploy on https://share.streamlit.io (Streamlit Community Cloud).
 """
 
-import numpy as np
 import pandas as pd
-import matplotlib.pyplot as plt
-import seaborn as sns
+import plotly.express as px
+import plotly.graph_objects as go
 import streamlit as st
+from sklearn.preprocessing import LabelEncoder
 
 # --------------------------------------------------------------------------
-# Page config
+# Page config & theme
 # --------------------------------------------------------------------------
 st.set_page_config(
     page_title="Mental Health in Tech Survey — EDA Dashboard",
@@ -26,13 +26,26 @@ st.set_page_config(
     initial_sidebar_state="expanded",
 )
 
-sns.set_style("whitegrid")
-plt.rcParams["axes.titlesize"] = 13
-plt.rcParams["axes.titleweight"] = "bold"
-
-PRIMARY = "#1D3557"
-ACCENT = "#E76F51"
+NAVY = "#1D3557"
 TEAL = "#6FB3B8"
+CORAL = "#E76F51"
+PALETTE = ["#1D3557", "#E76F51", "#6FB3B8", "#8AB17D", "#F4A261", "#457B9D"]
+PLOTLY_TEMPLATE = "plotly_white"
+
+
+def style_fig(fig, height=430, title=None):
+    """Apply consistent styling + hover formatting to every chart."""
+    fig.update_layout(
+        template=PLOTLY_TEMPLATE,
+        height=height,
+        margin=dict(l=10, r=10, t=50, b=10),
+        font=dict(family="Arial", size=13, color="#2B2B2B"),
+        title=dict(text=title, font=dict(size=16, color=NAVY)) if title else None,
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
+        hoverlabel=dict(bgcolor="white", font_size=13, font_family="Arial"),
+    )
+    return fig
+
 
 # --------------------------------------------------------------------------
 # Data loading & cleaning (cached)
@@ -65,7 +78,6 @@ def load_and_clean(path_or_buffer):
     raw = pd.read_csv(path_or_buffer)
     df = raw.copy()
 
-    # Drop low-value columns
     drop_cols = [c for c in ["comments", "Timestamp"] if c in df.columns]
     df.drop(columns=drop_cols, inplace=True)
 
@@ -87,11 +99,73 @@ def load_and_clean(path_or_buffer):
     return raw, df
 
 
+# Column descriptions used throughout the app (tooltips, data dictionary, chart captions)
+COLUMN_DESCRIPTIONS = {
+    "Age": "Respondent's age.",
+    "Gender": "Respondent's gender, standardized into Male / Female / Other.",
+    "Country": "Respondent's country of residence.",
+    "state": "US state, if applicable (only meaningful for US respondents).",
+    "self_employed": "Whether the respondent is self-employed.",
+    "family_history": "Whether the respondent has a family history of mental illness.",
+    "treatment": "Whether the respondent has sought treatment for a mental health condition (primary variable of interest).",
+    "work_interfere": "How often mental health interferes with work, if the respondent has a condition.",
+    "no_employees": "Number of employees at the respondent's company.",
+    "remote_work": "Whether the respondent works remotely at least 50% of the time.",
+    "tech_company": "Whether the employer is primarily a tech company.",
+    "benefits": "Whether the employer provides mental health benefits.",
+    "care_options": "Whether the respondent knows the mental health care options provided by their employer.",
+    "wellness_program": "Whether the employer has discussed mental health as part of an employee wellness program.",
+    "seek_help": "Whether the employer provides resources to learn about mental health and seeking help.",
+    "anonymity": "Whether anonymity is protected if the employee chooses to take advantage of mental health resources.",
+    "leave": "How easy it is perceived to be to take medical leave for a mental health condition.",
+    "mental_health_consequence": "Whether the respondent thinks discussing mental health with their employer would have negative consequences.",
+    "phys_health_consequence": "Whether the respondent thinks discussing a physical health issue with their employer would have negative consequences.",
+    "coworkers": "Willingness to discuss a mental health issue with coworkers.",
+    "supervisor": "Willingness to discuss a mental health issue with a direct supervisor.",
+    "mental_health_interview": "Whether the respondent would bring up a mental health issue in a job interview.",
+    "phys_health_interview": "Whether the respondent would bring up a physical health issue in a job interview.",
+    "mental_vs_physical": "Whether the respondent feels the employer takes mental health as seriously as physical health.",
+    "obs_consequence": "Whether the respondent has observed negative consequences for coworkers with mental health conditions.",
+}
+
+# Human-readable insight text shown under key charts
+DRIVER_INSIGHTS = {
+    "family_history": "Family history is the single strongest predictor in this dataset — respondents with a family history of mental illness seek treatment at roughly **double** the rate of those without one.",
+    "work_interfere": "Treatment-seeking rises almost linearly with how often mental health interferes with work — from ~14% at *Never* up to ~85% at *Often*, suggesting interference is an early-warning signal.",
+    "benefits": "Employees who know their employer offers mental health benefits seek treatment noticeably more than those who are unsure — **awareness** matters as much as the benefit itself.",
+    "care_options": "Similar to benefits: simply being aware of available care options is associated with a higher treatment-seeking rate than not knowing.",
+    "remote_work": "Remote work shows only a small relationship with treatment-seeking — a much weaker signal than family history or work interference.",
+    "anonymity": "A majority of respondents don't know whether anonymity is protected when using mental health resources — a clear communication gap for employers to close.",
+    "leave": "Close to half of respondents don't know how easy it would be to take mental-health-related leave, mirroring the anonymity awareness gap.",
+    "mental_health_consequence": "Respondents who fear negative consequences from disclosure actually seek treatment at a *higher* rate — likely because those with a real diagnosis have more at stake, not because fear encourages treatment.",
+    "no_employees": "Company size doesn't show a strong, consistent relationship with treatment-seeking on its own.",
+    "wellness_program": "Wellness programs that explicitly mention mental health are associated with somewhat higher treatment-seeking rates.",
+    "seek_help": "Employers who provide clear resources on how to seek help show a modest positive association with treatment-seeking.",
+}
+
 # --------------------------------------------------------------------------
-# Sidebar — data source & filters
+# Sidebar — data source, about, & filters
 # --------------------------------------------------------------------------
 st.sidebar.title("🧠 Mental Health in Tech")
 st.sidebar.caption("OSMI 2014 Survey — EDA Dashboard")
+
+with st.sidebar.expander("ℹ️ About this project", expanded=False):
+    st.markdown(
+        """
+This dashboard explores the **OSMI 2014 Mental Health in Tech Survey**
+(1,259 responses, 48 countries) to understand what personal and
+workplace factors relate to an employee **seeking treatment** for a
+mental health condition.
+
+**Explore:**
+- Demographics of respondents
+- What drives treatment-seeking (family history, work interference, benefits...)
+- How every variable correlates with every other
+- Any single column on its own
+
+Use the filters below to slice the data — every chart updates live.
+        """
+    )
 
 uploaded = st.sidebar.file_uploader("Upload survey.csv (optional)", type=["csv"])
 data_source = uploaded if uploaded is not None else "survey.csv"
@@ -106,7 +180,7 @@ except FileNotFoundError:
     st.stop()
 
 st.sidebar.markdown("---")
-st.sidebar.subheader("Filters")
+st.sidebar.subheader("🎛️ Filters")
 
 countries = ["All"] + sorted(df["Country"].unique().tolist())
 sel_country = st.sidebar.selectbox("Country", countries, index=0)
@@ -120,6 +194,19 @@ sel_age = st.sidebar.slider("Age range", age_min, age_max, (age_min, age_max))
 treatment_opt = ["All", "Yes", "No"]
 sel_treatment = st.sidebar.selectbox("Sought treatment?", treatment_opt, index=0)
 
+family_opt = ["All"] + sorted(df["family_history"].unique().tolist())
+sel_family = st.sidebar.selectbox("Family history of mental illness", family_opt, index=0)
+
+remote_opt = ["All"] + sorted(df["remote_work"].unique().tolist())
+sel_remote = st.sidebar.selectbox("Works remotely", remote_opt, index=0)
+
+size_order = ["1-5", "6-25", "26-100", "100-500", "500-1000", "More than 1000"]
+size_opt = ["All"] + [s for s in size_order if s in df["no_employees"].unique()]
+sel_size = st.sidebar.selectbox("Company size", size_opt, index=0)
+
+self_emp_opt = ["All"] + sorted(df["self_employed"].unique().tolist())
+sel_self_emp = st.sidebar.selectbox("Self-employed", self_emp_opt, index=0)
+
 filtered = df.copy()
 if sel_country != "All":
     filtered = filtered[filtered["Country"] == sel_country]
@@ -127,7 +214,18 @@ if sel_gender != "All":
     filtered = filtered[filtered["Gender"] == sel_gender]
 if sel_treatment != "All":
     filtered = filtered[filtered["treatment"] == sel_treatment]
+if sel_family != "All":
+    filtered = filtered[filtered["family_history"] == sel_family]
+if sel_remote != "All":
+    filtered = filtered[filtered["remote_work"] == sel_remote]
+if sel_size != "All":
+    filtered = filtered[filtered["no_employees"] == sel_size]
+if sel_self_emp != "All":
+    filtered = filtered[filtered["self_employed"] == sel_self_emp]
 filtered = filtered[(filtered["Age"] >= sel_age[0]) & (filtered["Age"] <= sel_age[1])]
+
+if st.sidebar.button("🔄 Reset all filters"):
+    st.rerun()
 
 st.sidebar.markdown("---")
 st.sidebar.metric("Rows after filters", f"{len(filtered):,}", f"of {len(df):,} total")
@@ -138,97 +236,150 @@ st.sidebar.metric("Rows after filters", f"{len(filtered):,}", f"of {len(df):,} t
 st.title("🧠 Mental Health in Tech Survey — EDA Dashboard")
 st.markdown(
     "Interactive exploration of the **OSMI 2014 Mental Health in Tech Survey** "
-    "(1,259 responses across 48 countries). Use the sidebar to filter the data; "
-    "every chart below updates live."
+    "(1,259 responses across 48 countries). Use the sidebar to filter the data — "
+    "every chart below updates live, and you can **hover over any chart** to see "
+    "exact values."
 )
+
+if filtered.empty:
+    st.warning("No rows match the current filter combination. Try widening your filters in the sidebar.")
+    st.stop()
 
 # --------------------------------------------------------------------------
 # Tabs
 # --------------------------------------------------------------------------
 tab_overview, tab_demo, tab_drivers, tab_corr, tab_explore, tab_data = st.tabs(
     ["📊 Overview", "👥 Demographics", "🔍 What Drives Treatment",
-     "🧮 Correlations", "🎛️ Explore Any Variable", "📄 Raw Data"]
+     "🧮 Correlations", "🎛️ Explore Any Variable", "📄 Raw Data & Dictionary"]
 )
 
-# ---------------- OVERVIEW ----------------
+# ================================= OVERVIEW =================================
 with tab_overview:
     c1, c2, c3, c4 = st.columns(4)
     c1.metric("Respondents (filtered)", f"{len(filtered):,}")
     c2.metric("Countries", filtered["Country"].nunique())
-    treat_rate = (filtered["treatment"] == "Yes").mean() * 100 if len(filtered) else 0
+    treat_rate = (filtered["treatment"] == "Yes").mean() * 100
     c3.metric("Sought Treatment", f"{treat_rate:.1f}%")
-    c4.metric("Median Age", f"{filtered['Age'].median():.0f}" if len(filtered) else "—")
+    c4.metric("Median Age", f"{filtered['Age'].median():.0f}")
 
-    st.markdown("### Missing Values in Raw Data")
-    miss = raw_df.isnull().sum()
-    miss = miss[miss > 0].sort_values(ascending=False)
-    miss_pct = (miss / len(raw_df) * 100).round(1)
-    fig, ax = plt.subplots(figsize=(9, 3.5))
-    sns.barplot(x=miss.index, y=miss_pct.values, palette="viridis", ax=ax)
-    ax.set_ylabel("Missing %")
-    ax.set_xlabel("")
-    plt.xticks(rotation=30, ha="right")
-    st.pyplot(fig)
+    col1, col2 = st.columns([1.3, 1])
+    with col1:
+        st.markdown("#### Missing Values in the Original (Raw) Data")
+        miss = raw_df.isnull().sum()
+        miss = miss[miss > 0].sort_values(ascending=False)
+        miss_pct = (miss / len(raw_df) * 100).round(1)
+        fig = px.bar(
+            x=miss_pct.index, y=miss_pct.values,
+            labels={"x": "Column", "y": "Missing %"},
+            color=miss_pct.values, color_continuous_scale="Teal",
+        )
+        fig.update_traces(hovertemplate="<b>%{x}</b><br>Missing: %{y}%<extra></extra>")
+        fig.update_layout(coloraxis_showscale=False)
+        st.plotly_chart(style_fig(fig, height=380), use_container_width=True)
+        st.caption(
+            "`state` and `work_interfere` are missing **by design** (not applicable to "
+            "every respondent), not by data-collection error — see the Raw Data tab for "
+            "how each column was cleaned."
+        )
+
+    with col2:
+        st.markdown("#### Who Sought Treatment?")
+        counts = filtered["treatment"].value_counts()
+        fig = px.pie(
+            values=counts.values, names=counts.index,
+            color=counts.index, color_discrete_map={"Yes": CORAL, "No": NAVY},
+            hole=0.45,
+        )
+        fig.update_traces(
+            textinfo="percent+label",
+            hovertemplate="<b>%{label}</b><br>%{value} respondents (%{percent})<extra></extra>",
+        )
+        st.plotly_chart(style_fig(fig, height=380), use_container_width=True)
+        st.caption(
+            "A near-even split makes `treatment` a well-balanced outcome — any factor "
+            "that correlates strongly with it (explored in the next tabs) is a meaningful "
+            "signal rather than a statistical artifact."
+        )
+
+    st.markdown("#### Age Distribution, Split by Treatment")
+    fig = px.histogram(
+        filtered, x="Age", color="treatment", nbins=25, barmode="overlay",
+        color_discrete_map={"Yes": CORAL, "No": NAVY}, opacity=0.7,
+    )
+    fig.update_traces(hovertemplate="Age: %{x}<br>Count: %{y}<extra></extra>")
+    st.plotly_chart(style_fig(fig, height=380), use_container_width=True)
     st.caption(
-        "`state` and `work_interfere` are missing *by design* (not applicable to "
-        "every respondent) rather than by data-collection error — see the cleaning "
-        "notes in the notebook for how each was handled."
+        "Age shows almost no separation between the two treatment groups — unlike the "
+        "behavioral/workplace factors explored in the **What Drives Treatment** tab, age "
+        "alone isn't a strong predictor here."
     )
 
-    st.markdown("### Proportion Who Sought Treatment")
-    fig, ax = plt.subplots(figsize=(4, 4))
-    counts = filtered["treatment"].value_counts()
-    if len(counts):
-        ax.pie(counts, labels=counts.index, autopct="%1.1f%%",
-               colors=[ACCENT, PRIMARY], startangle=90)
-    st.pyplot(fig)
-
-# ---------------- DEMOGRAPHICS ----------------
+# ================================ DEMOGRAPHICS ================================
 with tab_demo:
     col1, col2 = st.columns(2)
     with col1:
         st.markdown("#### Age Distribution")
-        fig, ax = plt.subplots(figsize=(6, 4.2))
-        if len(filtered):
-            sns.histplot(filtered["Age"], bins=25, kde=True, color=PRIMARY, ax=ax)
-        st.pyplot(fig)
+        fig = px.histogram(filtered, x="Age", nbins=25, color_discrete_sequence=[NAVY])
+        fig.update_traces(hovertemplate="Age: %{x}<br>Count: %{y}<extra></extra>")
+        st.plotly_chart(style_fig(fig, height=360), use_container_width=True)
+        st.caption("Respondents skew young — mostly 23–40, peaking around 28–32, matching the typical tech workforce.")
+
     with col2:
-        st.markdown("#### Gender Distribution")
-        fig, ax = plt.subplots(figsize=(6, 4.2))
-        order = filtered["Gender"].value_counts().index
-        sns.countplot(x="Gender", data=filtered, order=order, palette="pastel", ax=ax)
-        st.pyplot(fig)
+        st.markdown("#### Gender Distribution (Cleaned)")
+        order = filtered["Gender"].value_counts()
+        fig = px.bar(
+            x=order.index, y=order.values, color=order.index,
+            color_discrete_sequence=PALETTE, labels={"x": "Gender", "y": "Count"},
+        )
+        fig.update_traces(hovertemplate="<b>%{x}</b><br>Count: %{y}<extra></extra>")
+        fig.update_layout(showlegend=False)
+        st.plotly_chart(style_fig(fig, height=360), use_container_width=True)
+        st.caption("The sample is ~79% Male, reflecting tech's well-documented gender gap — interpret Female/Other findings with that smaller sample size in mind.")
 
-    st.markdown("#### Top Countries by Respondent Count")
-    fig, ax = plt.subplots(figsize=(10, 4))
-    top_c = filtered["Country"].value_counts().head(10)
-    sns.barplot(x=top_c.values, y=top_c.index, palette="mako", ax=ax)
-    ax.set_xlabel("Number of Respondents")
-    st.pyplot(fig)
+    col3, col4 = st.columns(2)
+    with col3:
+        st.markdown("#### Top Countries by Respondent Count")
+        top_c = filtered["Country"].value_counts().head(10).sort_values()
+        fig = px.bar(
+            x=top_c.values, y=top_c.index, orientation="h",
+            color=top_c.values, color_continuous_scale="Teal",
+            labels={"x": "Respondents", "y": ""},
+        )
+        fig.update_traces(hovertemplate="<b>%{y}</b><br>Respondents: %{x}<extra></extra>")
+        fig.update_layout(coloraxis_showscale=False)
+        st.plotly_chart(style_fig(fig, height=380), use_container_width=True)
+        st.caption("The US and UK dominate the sample — findings generalize most reliably to those markets.")
 
-    st.markdown("#### Company Size")
-    fig, ax = plt.subplots(figsize=(10, 3.8))
-    order = ["1-5", "6-25", "26-100", "100-500", "500-1000", "More than 1000"]
-    order = [o for o in order if o in filtered["no_employees"].unique()]
-    sns.countplot(x="no_employees", data=filtered, order=order, palette="crest", ax=ax)
-    st.pyplot(fig)
+    with col4:
+        st.markdown("#### Company Size")
+        order = [s for s in size_order if s in filtered["no_employees"].unique()]
+        counts = filtered["no_employees"].value_counts().reindex(order)
+        fig = px.bar(
+            x=counts.index, y=counts.values, color=counts.index,
+            color_discrete_sequence=PALETTE, labels={"x": "Company Size", "y": "Count"},
+        )
+        fig.update_traces(hovertemplate="<b>%{x}</b><br>Count: %{y}<extra></extra>")
+        fig.update_layout(showlegend=False)
+        st.plotly_chart(style_fig(fig, height=380), use_container_width=True)
+        st.caption("Respondents are fairly evenly spread across company sizes, so findings aren't dominated by any single bracket.")
 
-# ---------------- WHAT DRIVES TREATMENT ----------------
+# ============================= WHAT DRIVES TREATMENT =============================
 with tab_drivers:
     st.markdown(
-        "Each chart below compares **treatment-seeking** against a workplace or "
-        "personal factor. Bars are colored by whether the respondent sought treatment."
+        "Compare **treatment-seeking** against any workplace or personal factor. "
+        "Bars are colored by whether the respondent sought treatment — hover for exact counts."
     )
+    driver_options = [
+        "family_history", "work_interfere", "benefits", "care_options",
+        "remote_work", "anonymity", "leave", "mental_health_consequence",
+        "no_employees", "wellness_program", "seek_help",
+    ]
     driver_choice = st.selectbox(
-        "Choose a factor to compare against treatment-seeking:",
-        [
-            "family_history", "work_interfere", "benefits", "care_options",
-            "remote_work", "anonymity", "leave", "mental_health_consequence",
-            "no_employees", "wellness_program", "seek_help",
-        ],
-        index=0,
+        "Choose a factor:", driver_options, index=0,
+        format_func=lambda c: c.replace("_", " ").title(),
     )
-    fig, ax = plt.subplots(figsize=(10, 5))
+    st.caption(f"**{driver_choice}** — {COLUMN_DESCRIPTIONS.get(driver_choice, '')}")
+
     order = None
     if driver_choice == "work_interfere":
         order = ["Not Applicable", "Never", "Rarely", "Sometimes", "Often"]
@@ -236,70 +387,107 @@ with tab_drivers:
     elif driver_choice == "leave":
         order = ["Very easy", "Somewhat easy", "Don't know", "Somewhat difficult", "Very difficult"]
         order = [o for o in order if o in filtered[driver_choice].unique()]
-    sns.countplot(x=driver_choice, hue="treatment", data=filtered, order=order,
-                  palette="Set2", ax=ax)
-    ax.set_title(f"{driver_choice} vs Treatment Seeking")
-    plt.xticks(rotation=20, ha="right")
-    st.pyplot(fig)
+    elif driver_choice == "no_employees":
+        order = [s for s in size_order if s in filtered[driver_choice].unique()]
 
-    if len(filtered) and filtered[driver_choice].nunique() > 0:
-        ctab = pd.crosstab(filtered[driver_choice], filtered["treatment"], normalize="index") * 100
-        st.markdown("**Treatment rate (%) by category:**")
-        st.dataframe(ctab.round(1).style.format("{:.1f}%"), use_container_width=True)
+    grouped = filtered.groupby([driver_choice, "treatment"], observed=True).size().reset_index(name="count")
+    fig = px.bar(
+        grouped, x=driver_choice, y="count", color="treatment", barmode="group",
+        category_orders={driver_choice: order} if order else None,
+        color_discrete_map={"Yes": CORAL, "No": NAVY},
+        labels={driver_choice: driver_choice.replace("_", " ").title(), "count": "Count"},
+    )
+    fig.update_traces(hovertemplate="<b>%{x}</b><br>%{fullData.name}: %{y}<extra></extra>")
+    st.plotly_chart(style_fig(fig, height=440, title=f"{driver_choice.replace('_', ' ').title()} vs Treatment Seeking"), use_container_width=True)
 
-# ---------------- CORRELATIONS ----------------
+    if driver_choice in DRIVER_INSIGHTS:
+        st.info(f"💡 **Insight:** {DRIVER_INSIGHTS[driver_choice]}")
+
+    ctab = pd.crosstab(filtered[driver_choice], filtered["treatment"], normalize="index") * 100
+    st.markdown("**Treatment rate (%) by category:**")
+    st.dataframe(ctab.round(1).style.format("{:.1f}%").background_gradient(cmap="Oranges", axis=None), use_container_width=True)
+
+# ================================ CORRELATIONS ================================
 with tab_corr:
-    st.markdown("#### Correlation Heatmap (Label-Encoded Variables)")
-    from sklearn.preprocessing import LabelEncoder
-
+    st.markdown(
+        "This heatmap label-encodes every categorical column and computes pairwise "
+        "correlation, so you can scan the **entire dataset** for relationships at once. "
+        "Hover over any cell to see the exact correlation value."
+    )
     df_encoded = filtered.copy()
-    if len(df_encoded):
-        le = LabelEncoder()
-        # Use astype(str) + explicit non-numeric detection so this works whether
-        # pandas represents text columns as 'object' (older pandas) or the newer
-        # dedicated 'string' dtype (pandas 2.x/3.x defaults on some platforms,
-        # e.g. Streamlit Community Cloud) — relying on `dtype == object` alone
-        # silently misses 'string' columns on those platforms.
-        text_cols = df_encoded.select_dtypes(include=["object", "string", "category"]).columns
-        for col in text_cols:
-            df_encoded[col] = le.fit_transform(df_encoded[col].astype(str))
-        fig, ax = plt.subplots(figsize=(12, 9))
-        corr = df_encoded.corr()
-        sns.heatmap(corr, cmap="coolwarm", center=0, linewidths=0.3, ax=ax)
-        st.pyplot(fig)
-    else:
-        st.info("No rows match the current filters.")
+    le = LabelEncoder()
+    text_cols = df_encoded.select_dtypes(include=["object", "string", "category"]).columns
+    for col in text_cols:
+        df_encoded[col] = le.fit_transform(df_encoded[col].astype(str))
+    corr = df_encoded.corr().round(2)
 
-# ---------------- EXPLORE ANY VARIABLE ----------------
+    fig = go.Figure(
+        data=go.Heatmap(
+            z=corr.values, x=corr.columns, y=corr.columns,
+            colorscale="RdBu", zmid=0, zmin=-1, zmax=1,
+            hovertemplate="<b>%{y}</b> vs <b>%{x}</b><br>Correlation: %{z}<extra></extra>",
+            colorbar=dict(title="Corr"),
+        )
+    )
+    fig.update_layout(template=PLOTLY_TEMPLATE, height=650, margin=dict(l=10, r=10, t=20, b=10))
+    st.plotly_chart(fig, use_container_width=True)
+
+    st.caption(
+        "`treatment` correlates most strongly with `family_history` and `work_interfere`, "
+        "confirming the patterns seen in the **What Drives Treatment** tab. Most other "
+        "pairs show weak correlation, so the dataset doesn't suffer from severe "
+        "multicollinearity."
+    )
+
+# ============================= EXPLORE ANY VARIABLE =============================
 with tab_explore:
-    st.markdown("Pick any categorical column to see its distribution in the filtered data.")
-    # Same 'object' vs 'string' dtype issue as above — check both.
+    st.markdown("Pick any categorical column to see its distribution in the filtered data — optionally split by treatment status.")
+
     cat_cols = [
         c for c in filtered.select_dtypes(include=["object", "string", "category"]).columns
         if c != "state"
     ]
-    if not cat_cols:
-        st.info("No categorical columns available to explore.")
-    else:
-        default_idx = cat_cols.index("Gender") if "Gender" in cat_cols else 0
-        col_choice = st.selectbox("Column", cat_cols, index=default_idx)
-        if col_choice not in filtered.columns or filtered.empty:
-            st.info("No data matches the current filters.")
-        else:
-            fig, ax = plt.subplots(figsize=(10, 5))
-            order = filtered[col_choice].value_counts().index
-            sns.countplot(y=col_choice, data=filtered, order=order, palette="flare", ax=ax)
-            ax.set_xlabel("Count")
-            st.pyplot(fig)
+    default_idx = cat_cols.index("Gender") if "Gender" in cat_cols else 0
+    col_choice = st.selectbox("Column", cat_cols, index=default_idx, format_func=lambda c: c.replace("_", " ").title())
+    split_by_treatment = st.checkbox("Split by treatment status", value=False)
 
-# ---------------- RAW / CLEANED DATA ----------------
+    st.caption(f"**{col_choice}** — {COLUMN_DESCRIPTIONS.get(col_choice, 'No description available.')}")
+
+    order = filtered[col_choice].value_counts().index.tolist()
+    if split_by_treatment and col_choice != "treatment":
+        grouped = filtered.groupby([col_choice, "treatment"], observed=True).size().reset_index(name="count")
+        fig = px.bar(
+            grouped, y=col_choice, x="count", color="treatment", orientation="h",
+            category_orders={col_choice: order},
+            color_discrete_map={"Yes": CORAL, "No": NAVY},
+            labels={"count": "Count", col_choice: col_choice.replace("_", " ").title()},
+        )
+        fig.update_traces(hovertemplate="<b>%{y}</b><br>%{fullData.name}: %{x}<extra></extra>")
+    else:
+        counts = filtered[col_choice].value_counts()
+        fig = px.bar(
+            y=counts.index, x=counts.values, orientation="h",
+            color=counts.values, color_continuous_scale="Sunsetdark",
+            labels={"x": "Count", "y": ""},
+        )
+        fig.update_traces(hovertemplate="<b>%{y}</b><br>Count: %{x}<extra></extra>")
+        fig.update_layout(coloraxis_showscale=False)
+    st.plotly_chart(style_fig(fig, height=450), use_container_width=True)
+
+# ============================== RAW DATA & DICTIONARY ==============================
 with tab_data:
     st.markdown("#### Cleaned & Filtered Dataset")
     st.dataframe(filtered, use_container_width=True)
     csv = filtered.to_csv(index=False).encode("utf-8")
-    st.download_button("Download filtered data as CSV", csv, "filtered_survey.csv", "text/csv")
+    st.download_button("⬇️ Download filtered data as CSV", csv, "filtered_survey.csv", "text/csv")
 
-    with st.expander("Data cleaning notes"):
+    st.markdown("#### 📖 Data Dictionary")
+    dict_df = pd.DataFrame(
+        [{"Column": k, "Description": v} for k, v in COLUMN_DESCRIPTIONS.items() if k in filtered.columns]
+    )
+    st.dataframe(dict_df, use_container_width=True, hide_index=True)
+
+    with st.expander("🧹 Data cleaning notes"):
         st.markdown(
             """
 - **Age** filtered to a realistic **18–75** range (raw data had negative ages and one entry of `99999999999`).
