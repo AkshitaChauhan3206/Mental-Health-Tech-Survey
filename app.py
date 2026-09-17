@@ -405,7 +405,7 @@ with tab_drivers:
 
     ctab = pd.crosstab(filtered[driver_choice], filtered["treatment"], normalize="index") * 100
     st.markdown("**Treatment rate (%) by category:**")
-    st.dataframe(ctab.round(1).style.format("{:.1f}%").background_gradient(cmap="Oranges", axis=None), use_container_width=True)
+    st.dataframe(ctab.round(1).style.format("{:.1f}%"), use_container_width=True)
 
 # ================================ CORRELATIONS ================================
 with tab_corr:
