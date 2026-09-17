@@ -181,51 +181,87 @@ except FileNotFoundError:
 
 st.sidebar.markdown("---")
 st.sidebar.subheader("🎛️ Filters")
+st.sidebar.caption(
+    "Filters are cascading — each dropdown only shows options that actually "
+    "exist given your other selections, so you can never pick a combination "
+    "with zero matching rows."
+)
 
-countries = ["All"] + sorted(df["Country"].unique().tolist())
-sel_country = st.sidebar.selectbox("Country", countries, index=0)
+FILTER_KEYS = [
+    "f_country", "f_gender", "f_age", "f_treatment",
+    "f_family", "f_remote", "f_size", "f_self_emp",
+]
 
-genders = ["All"] + sorted(df["Gender"].unique().tolist())
-sel_gender = st.sidebar.selectbox("Gender", genders, index=0)
 
-age_min, age_max = int(df["Age"].min()), int(df["Age"].max())
-sel_age = st.sidebar.slider("Age range", age_min, age_max, (age_min, age_max))
+def reset_filters():
+    """Clear every filter widget's stored state so it falls back to its default."""
+    for k in FILTER_KEYS:
+        if k in st.session_state:
+            del st.session_state[k]
 
-treatment_opt = ["All", "Yes", "No"]
-sel_treatment = st.sidebar.selectbox("Sought treatment?", treatment_opt, index=0)
 
-family_opt = ["All"] + sorted(df["family_history"].unique().tolist())
-sel_family = st.sidebar.selectbox("Family history of mental illness", family_opt, index=0)
+def safe_selectbox(label, options, key):
+    """A selectbox whose stored value is auto-corrected if it's no longer valid
+    for the current (cascaded) option list — prevents Streamlit's
+    'default value is not part of the options' crash."""
+    if key not in st.session_state or st.session_state[key] not in options:
+        st.session_state[key] = options[0]
+    return st.sidebar.selectbox(label, options, key=key)
 
-remote_opt = ["All"] + sorted(df["remote_work"].unique().tolist())
-sel_remote = st.sidebar.selectbox("Works remotely", remote_opt, index=0)
 
-size_order = ["1-5", "6-25", "26-100", "100-500", "500-1000", "More than 1000"]
-size_opt = ["All"] + [s for s in size_order if s in df["no_employees"].unique()]
-sel_size = st.sidebar.selectbox("Company size", size_opt, index=0)
-
-self_emp_opt = ["All"] + sorted(df["self_employed"].unique().tolist())
-sel_self_emp = st.sidebar.selectbox("Self-employed", self_emp_opt, index=0)
-
+# Apply filters one at a time, in order — each subsequent filter's options are
+# computed from the data *already* narrowed by the filters above it. This is
+# what guarantees every reachable combination has at least one matching row.
 filtered = df.copy()
+
+countries = ["All"] + sorted(filtered["Country"].unique().tolist())
+sel_country = safe_selectbox("Country", countries, "f_country")
 if sel_country != "All":
     filtered = filtered[filtered["Country"] == sel_country]
+
+genders = ["All"] + sorted(filtered["Gender"].unique().tolist())
+sel_gender = safe_selectbox("Gender", genders, "f_gender")
 if sel_gender != "All":
     filtered = filtered[filtered["Gender"] == sel_gender]
-if sel_treatment != "All":
-    filtered = filtered[filtered["treatment"] == sel_treatment]
-if sel_family != "All":
-    filtered = filtered[filtered["family_history"] == sel_family]
-if sel_remote != "All":
-    filtered = filtered[filtered["remote_work"] == sel_remote]
-if sel_size != "All":
-    filtered = filtered[filtered["no_employees"] == sel_size]
-if sel_self_emp != "All":
-    filtered = filtered[filtered["self_employed"] == sel_self_emp]
+
+age_min, age_max = int(filtered["Age"].min()), int(filtered["Age"].max())
+if "f_age" not in st.session_state:
+    st.session_state["f_age"] = (age_min, age_max)
+else:
+    lo, hi = st.session_state["f_age"]
+    st.session_state["f_age"] = (max(lo, age_min), min(hi, age_max)) if lo <= hi else (age_min, age_max)
+    if st.session_state["f_age"][0] > st.session_state["f_age"][1]:
+        st.session_state["f_age"] = (age_min, age_max)
+sel_age = st.sidebar.slider("Age range", age_min, age_max, key="f_age")
 filtered = filtered[(filtered["Age"] >= sel_age[0]) & (filtered["Age"] <= sel_age[1])]
 
-if st.sidebar.button("🔄 Reset all filters"):
-    st.rerun()
+treatment_opt = ["All"] + sorted(filtered["treatment"].unique().tolist())
+sel_treatment = safe_selectbox("Sought treatment?", treatment_opt, "f_treatment")
+if sel_treatment != "All":
+    filtered = filtered[filtered["treatment"] == sel_treatment]
+
+family_opt = ["All"] + sorted(filtered["family_history"].unique().tolist())
+sel_family = safe_selectbox("Family history of mental illness", family_opt, "f_family")
+if sel_family != "All":
+    filtered = filtered[filtered["family_history"] == sel_family]
+
+remote_opt = ["All"] + sorted(filtered["remote_work"].unique().tolist())
+sel_remote = safe_selectbox("Works remotely", remote_opt, "f_remote")
+if sel_remote != "All":
+    filtered = filtered[filtered["remote_work"] == sel_remote]
+
+size_order = ["1-5", "6-25", "26-100", "100-500", "500-1000", "More than 1000"]
+size_opt = ["All"] + [s for s in size_order if s in filtered["no_employees"].unique()]
+sel_size = safe_selectbox("Company size", size_opt, "f_size")
+if sel_size != "All":
+    filtered = filtered[filtered["no_employees"] == sel_size]
+
+self_emp_opt = ["All"] + sorted(filtered["self_employed"].unique().tolist())
+sel_self_emp = safe_selectbox("Self-employed", self_emp_opt, "f_self_emp")
+if sel_self_emp != "All":
+    filtered = filtered[filtered["self_employed"] == sel_self_emp]
+
+st.sidebar.button("🔄 Reset all filters", on_click=reset_filters)
 
 st.sidebar.markdown("---")
 st.sidebar.metric("Rows after filters", f"{len(filtered):,}", f"of {len(df):,} total")
